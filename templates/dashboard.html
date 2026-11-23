@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · TalentLens AI{% endblock %}
+{% block content %}
+<div class="row between"><div><h1>Recruiter dashboard</h1><p class="muted">Overview of all screening activity</p></div>
+<a class="btn btn-primary" href="/screening"><i data-lucide="plus"></i>New screening</a></div>
+<div id="kpis" class="grid kpis" style="margin:20px 0"><div class="card"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+<div class="grid cols">
+  <div class="card"><h2>Score distribution</h2><canvas id="c1" height="200"></canvas></div>
+  <div class="card"><h2>Candidates by status</h2><canvas id="c2" height="200"></canvas></div>
+  <div class="card"><h2>Skills in demand</h2><canvas id="c3" height="200"></canvas></div>
+</div>
+<div class="card" style="margin-top:16px"><h2>Jobs</h2><div id="jobs" class="tbl-wrap"></div></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(async () => {
+  try {
+    const [s, jobs] = await Promise.all([api("/api/stats"), api("/api/jobs")]);
+    const k = [["Active jobs", jobs.length], ["Resumes screened", s.resumes_screened],
+               ["Avg. match score", s.avg_score + "%"], ["Shortlisted", s.shortlisted]];
+    $("#kpis").innerHTML = k.map(([l, v]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${esc(v)}</div></div>`).join("");
+
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue("--accent").trim(), muted = css.getPropertyValue("--muted").trim();
+    Chart.defaults.color = muted; Chart.defaults.font.family = "Inter, sans-serif";
+    const opts = {plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}};
+
+    new Chart($("#c1"), {type: "bar", data: {labels: Object.keys(s.score_distribution),
+      datasets: [{data: Object.values(s.score_distribution), backgroundColor: accent, borderRadius: 4}]}, options: opts});
+    new Chart($("#c2"), {type: "doughnut", data: {labels: Object.keys(s.status_counts),
+      datasets: [{data: Object.values(s.status_counts), backgroundColor: ["#818cf8", "#fbbf24", "#34d399", "#f87171"], borderWidth: 0}]},
+      options: {plugins: {legend: {position: "bottom"}}}});
+
+    const counts = {};
+    jobs.forEach(j => (j.analysis?.required_skills || []).forEach(sk => counts[sk] = (counts[sk] || 0) + 1));
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    new Chart($("#c3"), {type: "bar", data: {labels: top.map(t => t[0]), datasets: [{data: top.map(t => t[1]), backgroundColor: accent, borderRadius: 4}]},
+      options: {...opts, indexAxis: "y"}});
+
+    $("#jobs").innerHTML = jobs.length ? `<table><thead><tr><th>Job</th><th>Candidates</th><th>Required skills</th><th></th></tr></thead><tbody>` +
+      jobs.map(j => `<tr><td><b>${esc(j.title)}</b></td><td>${j.candidate_count}</td>
+        <td>${(j.analysis?.required_skills || []).map(x => `<span class="chip">${esc(x)}</span>`).join("")}</td>
+        <td><a class="btn" href="/jobs/${j.id}/candidates">View ranking</a></td></tr>`).join("") + `</tbody></table>`
+      : `<div class="empty">No jobs yet. Start a new screening to see results here.</div>`;
+  } catch (e) { toast(e.message, "err"); }
+})();
+</script>
+{% endblock %}

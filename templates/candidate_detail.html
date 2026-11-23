@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Candidate · TalentLens AI{% endblock %}
+{% block content %}
+<div id="root"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const CAND_ID = {{ cand_id }};
+const STATUSES = ["NEW", "REVIEW", "SHORTLISTED", "REJECTED"];
+const chips = (arr, cls) => arr.length ? arr.map(x => `<span class="chip ${cls}">${esc(x)}</span>`).join("") : `<span class="muted">None</span>`;
+const lines = t => (t || "").split("\n").filter(x => x.trim());
+
+(async () => {
+  try {
+    const c = await api(`/api/candidates/${CAND_ID}`);
+    const s = c.score, b = s.breakdown, mine = c.skills.map(x => x.toLowerCase());
+    const metric = (l, v) => `<div class="metric"><span>${l}</span><div class="bar"><i style="width:${v}%"></i></div><b>${v}%</b></div>`;
+    const gapRow = (skill, has) => `<div class="gap"><span>${esc(skill)}</span><span class="${has ? "ok-t" : "bad-t"}">${has ? "✓ Found" : "✕ Missing"}</span></div>`;
+    const req = c.job.analysis.required_skills, pref = c.job.analysis.preferred_skills;
+    const list = t => lines(t).length ? `<ul class="plain">${lines(t).map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="muted">Not detected</span>`;
+
+    $("#root").innerHTML = `
+    <a class="muted" href="/jobs/${c.job_id}/candidates">← Back to ranking</a>
+    <div class="card row" style="margin:12px 0 16px;gap:20px">
+      <div class="ring" style="--p:${s.overall}"><span>${Math.round(s.overall)}%</span></div>
+      <div style="flex:1;min-width:220px"><h1>${esc(c.name)}</h1>
+        <div class="muted">${esc(c.email || "No email")} · ${esc(c.phone || "No phone")}</div>
+        <div style="margin-top:6px"><span class="chip">Rank #${c.rank} of ${c.total_candidates}</span><span class="chip">${esc(c.label)} match</span><span class="chip">${esc(c.job.title)}</span></div></div>
+      <button id="explainBtn" class="btn btn-primary"><i data-lucide="lightbulb"></i>Explain ranking</button>
+    </div>
+    <div id="explain" class="card" style="display:none;margin-bottom:16px"><h2>Why this candidate ranked #${c.rank}</h2>
+      <ul class="plain">${s.explanation.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div class="grid cols">
+      <div class="card"><h2>Match breakdown</h2>${metric("Semantic match", b.semantic)}${metric("Skills match", b.skills)}${metric("Experience", b.experience)}${metric("Education", b.education)}${metric("Certifications", b.certifications)}</div>
+      <div class="card"><h2>Skill gap analysis</h2>
+        <div class="muted" style="margin-bottom:4px">Required</div>${req.map(k => gapRow(k, s.matched_skills.includes(k))).join("") || "<span class='muted'>None listed</span>"}
+        ${pref.length ? `<div class="muted" style="margin:10px 0 4px">Preferred</div>${pref.map(k => gapRow(k, mine.includes(k.toLowerCase()))).join("")}` : ""}</div>
+      <div class="card"><h2>Matched skills</h2>${chips(s.matched_skills, "ok")}<h2 style="margin-top:14px">Missing skills</h2>${chips(s.missing_skills, "bad")}
+        <h2 style="margin-top:14px">All detected skills</h2>${chips(c.skills, "")}</div>
+      <div class="card"><h2>Experience · ${s.experience_years} yrs estimated</h2>${list(c.experience_text)}</div>
+      <div class="card"><h2>Education</h2>${list(c.education_text)}<h2 style="margin-top:14px">Certifications</h2>${list(c.certifications_text)}</div>
+      <div class="card"><h2>Recruiter decision</h2><div class="row" id="stBtns">${STATUSES.map(x => `<button class="btn ${x === c.status ? "active" : ""}" data-s="${x}">${x}</button>`).join("")}</div>
+        <textarea id="notes" class="input" style="margin-top:12px;min-height:90px" placeholder="Add notes...">${esc(c.notes)}</textarea>
+        <button id="saveNotes" class="btn" style="margin-top:8px">Save notes</button></div>
+    </div>`;
+    icons();
+    $("#explainBtn").onclick = () => { const e = $("#explain"); e.style.display = e.style.display === "none" ? "block" : "none"; };
+    document.querySelectorAll("#stBtns .btn").forEach(btn => btn.onclick = async () => {
+      if (btn.dataset.s === "REJECTED" && !confirm("Mark this candidate as rejected?")) return;
+      try { await api(`/api/candidates/${CAND_ID}`, jsonOpts("PATCH", {status: btn.dataset.s}));
+        document.querySelectorAll("#stBtns .btn").forEach(x => x.classList.toggle("active", x === btn)); toast("Status updated"); }
+      catch (e) { toast(e.message, "err"); }
+    });
+    $("#saveNotes").onclick = async () => {
+      try { await api(`/api/candidates/${CAND_ID}`, jsonOpts("PATCH", {notes: $("#notes").value})); toast("Notes saved"); }
+      catch (e) { toast(e.message, "err"); }
+    };
+  } catch (e) { $("#root").innerHTML = `<div class="empty">Could not load candidate. ${esc(e.message)}</div>`; }
+})();
+</script>
+{% endblock %}

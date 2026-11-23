@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}TalentLens AI{% endblock %}</title>
+<script>document.documentElement.dataset.theme = localStorage.getItem("tl-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<header class="nav"><div class="nav-in">
+  <a class="brand" href="/"><span class="logo">T</span>TalentLens AI</a>
+  <nav><a href="/dashboard">Dashboard</a><a href="/screening">Screening</a></nav>
+  <button id="themeBtn" class="btn btn-ghost" aria-label="Toggle theme"><i data-lucide="sun-moon"></i></button>
+</div></header>
+<main class="container">
+{% block content %}{% endblock %}
+<p class="note">TalentLens AI is a decision-support tool. It assists recruiters and does not replace human judgment.</p>
+</main>
+<div id="toasts"></div>
+<script src="https://unpkg.com/lucide@0.469.0"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

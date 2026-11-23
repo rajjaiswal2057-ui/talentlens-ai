@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Screening · TalentLens AI{% endblock %}
+{% block content %}
+<h1>New screening</h1><p class="muted">Add a job description, then upload resumes to rank them.</p>
+<div class="grid cols" style="margin-top:20px">
+  <div class="card">
+    <h2>1. Job description</h2>
+    <input id="title" class="input" placeholder="Job title, e.g. Data Scientist" style="margin-bottom:10px">
+    <textarea id="jd" class="input" placeholder="Paste the job description. Put optional skills on a line starting with 'Preferred:'"></textarea>
+    <div class="row" style="margin-top:12px"><button id="analyze" class="btn btn-primary"><i data-lucide="sparkles"></i>Analyze JD</button></div>
+    <div id="analysis" style="margin-top:16px"></div>
+  </div>
+  <div class="card">
+    <h2>2. Upload resumes</h2>
+    <div id="drop" class="drop" tabindex="0"><i data-lucide="upload-cloud"></i>
+      <p>Drag and drop PDF or DOCX files, or click to browse</p>
+      <input id="files" type="file" multiple accept=".pdf,.docx" hidden></div>
+    <div id="queue" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="run" class="btn btn-primary" disabled><i data-lucide="play"></i>Screen resumes</button>
+      <a id="viewLink" class="btn" style="display:none">View ranking</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let jobId = null, files = [], status = [];
+const drop = $("#drop"), input = $("#files");
+const okType = f => /\.(pdf|docx)$/i.test(f.name);
+
+function refresh() {
+  $("#run").disabled = !(jobId && files.length);
+  $("#queue").innerHTML = files.map((f, i) => `<div class="gap"><span>${esc(f.name)} <span class="muted">· ${f.name.split(".").pop().toUpperCase()}</span></span>
+    <span class="${/^Error/.test(status[i]) ? "bad-t" : /^Ranked/.test(status[i]) ? "ok-t" : "muted"}">${esc(status[i])}</span></div>`).join("");
+}
+function addFiles(list) {
+  [...list].forEach(f => {
+    if (!okType(f)) return toast(`${f.name}: only PDF and DOCX are supported`, "err");
+    files.push(f); status.push("Ready");
+  });
+  refresh();
+}
+drop.onclick = () => input.click();
+drop.onkeydown = e => (e.key === "Enter" || e.key === " ") && input.click();
+input.onchange = () => { addFiles(input.files); input.value = ""; };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); addFiles(e.dataTransfer.files); };
+
+$("#analyze").onclick = async () => {
+  const btn = $("#analyze"); btn.disabled = true;
+  try {
+    const job = await api("/api/jobs", jsonOpts("POST", {title: $("#title").value, description: $("#jd").value}));
+    jobId = job.id; const a = job.analysis;
+    const chips = (arr, cls) => arr.length ? arr.map(x => `<span class="chip ${cls}">${esc(x)}</span>`).join("") : `<span class="muted">None detected</span>`;
+    $("#analysis").innerHTML = `<div class="gap"><b>Required skills</b><span>${chips(a.required_skills, "")}</span></div>
+      <div class="gap"><b>Preferred</b><span>${chips(a.preferred_skills, "warn")}</span></div>
+      <div class="gap"><b>Experience</b><span>${a.min_experience_years ? a.min_experience_years + "+ years" : "Not specified"}</span></div>
+      <div class="gap"><b>Education</b><span>${a.education.map(esc).join(", ") || "Not specified"}</span></div>`;
+    toast("Job description analyzed"); refresh();
+  } catch (e) { toast(e.message, "err"); }
+  btn.disabled = false;
+};
+
+function upload() {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", `/api/jobs/${jobId}/upload`);
+    x.upload.onprogress = e => { if (e.lengthComputable) { status = status.map(() => `Uploading ${Math.round(e.loaded / e.total * 100)}%`); refresh(); } };
+    x.upload.onload = () => { status = status.map(() => "Parsing and matching..."); refresh(); };
+    x.onload = () => { try { const d = JSON.parse(x.responseText); x.status < 300 ? resolve(d) : reject(new Error(d.error || "Upload failed")); } catch { reject(new Error("Server error")); } };
+    x.onerror = () => reject(new Error("Network error"));
+    const fd = new FormData(); files.forEach(f => fd.append("files", f)); x.send(fd);
+  });
+}
+
+$("#run").onclick = async () => {
+  $("#run").disabled = true;
+  try {
+    const res = await upload();
+    status = res.map(r => r.status === "ok" ? `Ranked · ${r.score}%` : `Error: ${r.error}`);
+    refresh();
+    const ok = res.filter(r => r.status === "ok").length;
+    toast(`${ok} of ${res.length} resumes ranked`, ok ? "ok" : "err");
+    if (ok) { $("#viewLink").href = `/jobs/${jobId}/candidates`; $("#viewLink").style.display = "inline-flex"; }
+  } catch (e) { status = status.map(() => "Error: " + e.message); refresh(); toast(e.message, "err"); }
+};
+</script>
+{% endblock %}

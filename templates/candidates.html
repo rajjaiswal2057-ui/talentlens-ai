@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Ranking · TalentLens AI{% endblock %}
+{% block content %}
+<div class="row between"><div><h1>Candidate ranking</h1><p class="muted" id="sub">Loading...</p></div>
+<a class="btn" href="/api/jobs/{{ job_id }}/export.csv"><i data-lucide="download"></i>Export CSV</a></div>
+<div class="card" style="margin:20px 0"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+  <input id="q" class="input" placeholder="Search candidate..." aria-label="Search">
+  <input id="skill" class="input" placeholder="Filter by skill" aria-label="Skill">
+  <select id="status" class="input" aria-label="Status"><option value="">All statuses</option><option>NEW</option><option>REVIEW</option><option>SHORTLISTED</option><option>REJECTED</option></select>
+  <label class="muted">Min score: <b id="minV">0</b>%<input id="min" type="range" min="0" max="100" value="0" style="width:100%"></label>
+</div></div>
+<div class="card"><div id="tbl" class="tbl-wrap"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+<div class="row between" style="margin-top:12px"><span class="muted" id="pinfo"></span><div class="row"><button id="prev" class="btn">Prev</button><button id="next" class="btn">Next</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const JOB_ID = {{ job_id }}, PER = 8;
+let all = [], sortKey = "rank", sortDir = 1, page = 1;
+const val = (c, k) => ({rank: c.rank, name: (c.name || "").toLowerCase(), score: c.score.overall, skills: c.score.breakdown.skills,
+  exp: c.score.experience_years, edu: c.score.breakdown.education, status: c.status})[k];
+const eduLabel = v => v >= 80 ? "Strong" : v >= 50 ? "Fair" : "Low";
+const cols = [["rank", "Rank"], ["name", "Candidate"], ["score", "Match score"], ["skills", "Skills match"], ["exp", "Experience"], ["edu", "Education"], ["status", "Status"]];
+
+async function load() {
+  const p = new URLSearchParams({q: $("#q").value, skill: $("#skill").value, status: $("#status").value, min_score: $("#min").value});
+  try { all = await api(`/api/jobs/${JOB_ID}/candidates?${p}`); page = 1; render(); }
+  catch (e) { toast(e.message, "err"); }
+}
+
+function render() {
+  $("#sub").textContent = `${all.length} candidate${all.length === 1 ? "" : "s"} shown`;
+  if (!all.length) { $("#tbl").innerHTML = `<div class="empty">No candidates match these filters.</div>`; $("#pinfo").textContent = ""; return; }
+  const rows = [...all].sort((a, b) => (val(a, sortKey) > val(b, sortKey) ? 1 : -1) * sortDir);
+  const pages = Math.ceil(rows.length / PER); page = Math.min(page, pages);
+  const view = rows.slice((page - 1) * PER, page * PER);
+  $("#tbl").innerHTML = `<table><thead><tr>${cols.map(([k, l]) => `<th data-k="${k}">${l}${sortKey === k ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}<th>Action</th></tr></thead><tbody>` +
+    view.map(c => `<tr><td>${String(c.rank).padStart(2, "0")}</td>
+      <td><a href="/candidates/${c.id}"><b>${esc(c.name)}</b></a><div class="muted">${esc(c.email)}</div></td>
+      <td><div class="row"><b>${c.score.overall}%</b><div class="bar" style="width:80px"><i style="width:${c.score.overall}%"></i></div><span class="chip">${esc(c.label)}</span></div></td>
+      <td>${c.score.breakdown.skills}%</td><td>${c.score.experience_years} yrs</td>
+      <td>${eduLabel(c.score.breakdown.education)}</td>
+      <td><select class="input st" data-id="${c.id}" data-old="${c.status}" style="width:130px">${["NEW", "REVIEW", "SHORTLISTED", "REJECTED"].map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+      <td><a class="btn" href="/candidates/${c.id}">View</a></td></tr>`).join("") + `</tbody></table>`;
+  $("#pinfo").textContent = `Page ${page} of ${pages}`;
+  $("#prev").disabled = page <= 1; $("#next").disabled = page >= pages;
+  document.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; render(); });
+  document.querySelectorAll(".st").forEach(sel => sel.onchange = async () => {
+    if (sel.value === "REJECTED" && !confirm("Mark this candidate as rejected?")) { sel.value = sel.dataset.old; return; }
+    try { await api(`/api/candidates/${sel.dataset.id}`, jsonOpts("PATCH", {status: sel.value})); sel.dataset.old = sel.value; toast("Status updated"); }
+    catch (e) { toast(e.message, "err"); }
+  });
+}
+
+let t; const debounced = () => { clearTimeout(t); t = setTimeout(load, 250); };
+["q", "skill"].forEach(id => $("#" + id).oninput = debounced);
+$("#status").onchange = load;
+$("#min").oninput = () => { $("#minV").textContent = $("#min").value; debounced(); };
+$("#prev").onclick = () => { page--; render(); };
+$("#next").onclick = () => { page++; render(); };
+load();
+</script>
+{% endblock %}

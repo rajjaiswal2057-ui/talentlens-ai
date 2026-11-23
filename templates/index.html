@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <span class="chip">AI-powered recruitment</span>
+  <h1>Find the right talent, faster.</h1>
+  <p class="muted" style="font-size:16px">AI-powered resume screening that understands skills, experience and candidate-job alignment.</p>
+  <div class="row" style="margin-top:20px">
+    <a class="btn btn-primary" href="/screening"><i data-lucide="play"></i>Start Screening</a>
+    <a class="btn" href="/dashboard"><i data-lucide="layout-dashboard"></i>View Demo</a>
+  </div>
+</section>
+<div class="steps">
+  <span class="step">Resume Upload</span>→<span class="step">AI Parsing</span>→<span class="step">Skill Extraction</span>→<span class="step">Semantic Matching</span>→<span class="step">Candidate Ranking</span>
+</div>
+<div class="grid cols">
+  <div class="card"><h2>Explainable scores</h2><p class="muted">Every ranking shows why: matched skills, missing skills, experience and semantic fit.</p></div>
+  <div class="card"><h2>Semantic understanding</h2><p class="muted">Sentence embeddings treat "ML" and "Machine Learning" as related, not different.</p></div>
+  <div class="card"><h2>Human in control</h2><p class="muted">Shortlist, review or reject with notes. Protected attributes are never used for ranking.</p></div>
+</div>
+{% endblock %}
