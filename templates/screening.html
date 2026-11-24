@@ -1,11 +1,11 @@
-{% extends "base.html" %}
-{% block title %}Screening · TalentLens AI{% endblock %}
+﻿{% extends "base.html" %}
+{% block title %}Screening Â· TalentLens AI{% endblock %}
 {% block content %}
 <h1>New screening</h1><p class="muted">Add a job description, then upload resumes to rank them.</p>
 <div class="grid cols" style="margin-top:20px">
   <div class="card">
     <h2>1. Job description</h2>
-    <input id="title" class="input" placeholder="Job title, e.g. Data Scientist" style="margin-bottom:10px">
+    <input id="title" class="input" placeholder="Job title, e.g. Software Engineer" style="margin-bottom:10px">
     <textarea id="jd" class="input" placeholder="Paste the job description. Put optional skills on a line starting with 'Preferred:'"></textarea>
     <div class="row" style="margin-top:12px"><button id="analyze" class="btn btn-primary"><i data-lucide="sparkles"></i>Analyze JD</button></div>
     <div id="analysis" style="margin-top:16px"></div>
@@ -31,7 +31,7 @@ const okType = f => /\.(pdf|docx)$/i.test(f.name);
 
 function refresh() {
   $("#run").disabled = !(jobId && files.length);
-  $("#queue").innerHTML = files.map((f, i) => `<div class="gap"><span>${esc(f.name)} <span class="muted">· ${f.name.split(".").pop().toUpperCase()}</span></span>
+  $("#queue").innerHTML = files.map((f, i) => `<div class="gap"><span>${esc(f.name)} <span class="muted">Â· ${f.name.split(".").pop().toUpperCase()}</span></span>
     <span class="${/^Error/.test(status[i]) ? "bad-t" : /^Ranked/.test(status[i]) ? "ok-t" : "muted"}">${esc(status[i])}</span></div>`).join("");
 }
 function addFiles(list) {
@@ -79,7 +79,7 @@ $("#run").onclick = async () => {
   $("#run").disabled = true;
   try {
     const res = await upload();
-    status = res.map(r => r.status === "ok" ? `Ranked · ${r.score}%` : `Error: ${r.error}`);
+    status = res.map(r => r.status === "ok" ? `Ranked Â· ${r.score}%` : `Error: ${r.error}`);
     refresh();
     const ok = res.filter(r => r.status === "ok").length;
     toast(`${ok} of ${res.length} resumes ranked`, ok ? "ok" : "err");
